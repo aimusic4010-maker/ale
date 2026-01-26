@@ -1,9 +1,8 @@
   import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Plus, UtensilsCrossed, X, Clock, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Plus, X, Clock, ChevronRight } from 'lucide-react';
 import { useFoodOrderSession, FoodItem } from '../contexts/FoodOrderSession';
-import { useFoodPayment } from '../contexts/FoodPaymentContext';
 import { FoodSelectionModal } from '../components/FoodSelectionModal';
 import { useGeolocation } from '../hooks/useGeolocation';
 import { mockDeliveryAddresses, getDeliveryAddressSuggestions } from '../data/mockDeliveryAddresses';
@@ -11,7 +10,6 @@ import { mockDeliveryAddresses, getDeliveryAddressSuggestions } from '../data/mo
 export function FoodiesRoute() {
   const navigate = useNavigate();
   const { address: currentLocation, loading: locationLoading } = useGeolocation();
-  const { startPaymentAuthorization } = useFoodPayment();
   const {
     cartItems,
     currentLocationFoodIds,
@@ -24,7 +22,6 @@ export function FoodiesRoute() {
     removeStopsWithoutFoodOrAddress,
     deliveryLocation,
     setDeliveryLocation,
-    deliveryModeFee
   } = useFoodOrderSession();
 
   const currentLocationInputRef = useRef<HTMLInputElement>(null);
@@ -38,16 +35,20 @@ export function FoodiesRoute() {
   const [showCurrentLocationSuggestions, setShowCurrentLocationSuggestions] = useState(false);
   const [showStopSuggestions, setShowStopSuggestions] = useState<{ [key: string]: boolean }>({});
   const [showRecentAddresses, setShowRecentAddresses] = useState(true);
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
+  // Flags to track user editing state
+  const [userIsEditingLocation, setUserIsEditingLocation] = useState(false);
+  const [userIsEditingStop, setUserIsEditingStop] = useState<{ [key: string]: boolean }>({});
+
+  // Auto-fill location ONLY on initial load or when user selects a suggestion
   useEffect(() => {
-    if (currentLocation && !deliveryLocation) {
+    if (currentLocation && !deliveryLocation && !userIsEditingLocation) {
       setDeliveryLocation(currentLocation);
       setCurrentLocationQuery(currentLocation);
-    } else if (deliveryLocation) {
+    } else if (deliveryLocation && !userIsEditingLocation) {
       setCurrentLocationQuery(deliveryLocation);
     }
-  }, [currentLocation, deliveryLocation, setDeliveryLocation]);
+  }, [currentLocation, deliveryLocation, setDeliveryLocation, userIsEditingLocation]);
 
   useEffect(() => {
     if (cartItems.length === 0) {
@@ -56,6 +57,7 @@ export function FoodiesRoute() {
   }, [cartItems.length, navigate]);
 
   const handleCurrentLocationChange = (value: string) => {
+    setUserIsEditingLocation(true); // Mark as user editing
     setCurrentLocationQuery(value);
     setDeliveryLocation(value);
     setShowCurrentLocationSuggestions(true);
@@ -63,6 +65,7 @@ export function FoodiesRoute() {
   };
 
   const handleCurrentLocationSelect = (address: string) => {
+    setUserIsEditingLocation(false); // User selected a suggestion, allow auto-fill again
     setDeliveryLocation(address);
     setCurrentLocationQuery(address);
     setShowCurrentLocationSuggestions(false);
@@ -74,13 +77,26 @@ export function FoodiesRoute() {
     }
   };
 
+  const handleClearCurrentLocation = () => {
+    setUserIsEditingLocation(true);
+    setCurrentLocationQuery('');
+    setDeliveryLocation('');
+    setShowCurrentLocationSuggestions(false);
+    currentLocationInputRef.current?.focus();
+  };
+
   const handleStopAddressChange = (stopId: string, value: string) => {
+    setUserIsEditingStop(prev => ({ ...prev, [stopId]: true })); // Mark as user editing
+    const newStops = stops.map(s =>
+      s.id === stopId ? { ...s, address: value } : s
+    );
     setStopAddressQuery(prev => ({ ...prev, [stopId]: value }));
     setShowStopSuggestions(prev => ({ ...prev, [stopId]: true }));
     setShowRecentAddresses(false);
   };
 
   const handleStopAddressSelect = (stopId: string, address: string, description: string) => {
+    setUserIsEditingStop(prev => ({ ...prev, [stopId]: false })); // User selected a suggestion
     updateStop(stopId, { address, description });
     setStopAddressQuery(prev => ({ ...prev, [stopId]: '' }));
     setShowStopSuggestions(prev => ({ ...prev, [stopId]: false }));
@@ -93,6 +109,13 @@ export function FoodiesRoute() {
         setActiveLocationInput(nextStop.id);
       }
     }
+  };
+
+  const handleClearStop = (stopId: string) => {
+    setUserIsEditingStop(prev => ({ ...prev, [stopId]: true }));
+    updateStop(stopId, { address: '' });
+    setStopAddressQuery(prev => ({ ...prev, [stopId]: '' }));
+    stopInputRefs.current[stopId]?.focus();
   };
 
   const handleAddStop = () => {
@@ -114,18 +137,9 @@ export function FoodiesRoute() {
     setShowRecentAddresses(true);
   };
 
-  const handleCashPayment = async () => {
+  const handleGoToDelivery = () => {
     removeStopsWithoutFoodOrAddress();
-    setIsProcessingPayment(true);
-
-    try {
-      await startPaymentAuthorization('cash', deliveryModeFee || 0);
-      setIsProcessingPayment(false);
-      navigate('/food-delivery');
-    } catch (error) {
-      setIsProcessingPayment(false);
-      alert('Error processing payment');
-    }
+    navigate('/food-delivery');
   };
 
   const currentLocationFoods = getCurrentLocationFoods();
@@ -192,14 +206,32 @@ export function FoodiesRoute() {
                   placeholder="Delivery location"
                   className="flex-1 bg-transparent text-gray-900 text-xs outline-none"
                 />
+                {currentLocationQuery && (
+                  <motion.button
+                    onClick={handleClearCurrentLocation}
+                    className="mr-2 w-4 h-4 bg-gray-300 rounded-full flex items-center justify-center hover:bg-gray-400 transition-colors"
+                    whileTap={{ scale: 0.9 }}
+                  >
+                    <X size={10} className="text-white" />
+                  </motion.button>
+                )}
                 <motion.button
                   onClick={() => setShowCurrentLocationModal(true)}
                   disabled={currentLocationFoods.length === 0}
-                  className="ml-2 flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-full border border-gray-200 hover:bg-gray-100 transition-colors"
+                  className="relative ml-2 flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-full border border-gray-200 hover:bg-gray-100 transition-colors"
                   whileTap={{ scale: 0.95 }}
                 >
-                  <UtensilsCrossed size={10} className="text-gray-600" />
-                  <span className="text-[10px] font-medium text-gray-700">{currentLocationFoods.length}</span>
+                  <span className="text-sm">🍔</span>
+                  <span className="text-[10px] font-medium text-gray-700">View your foodies</span>
+                  {currentLocationFoods.length > 0 && (
+                    <motion.span
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold rounded-full w-4 h-4 flex items-center justify-center"
+                    >
+                      {currentLocationFoods.length}
+                    </motion.span>
+                  )}
                 </motion.button>
               </div>
             </div>
@@ -262,6 +294,15 @@ export function FoodiesRoute() {
                       placeholder="Stop location"
                       className="flex-1 bg-transparent text-gray-900 text-xs outline-none"
                     />
+                    {(stop.address || stopAddressQuery[stop.id]) && (
+                      <motion.button
+                        onClick={() => handleClearStop(stop.id)}
+                        className="mr-2 w-4 h-4 bg-gray-300 rounded-full flex items-center justify-center hover:bg-gray-400 transition-colors"
+                        whileTap={{ scale: 0.9 }}
+                      >
+                        <X size={10} className="text-white" />
+                      </motion.button>
+                    )}
                     <motion.button
                       onClick={() => setShowStopModal(stop.id)}
                       className="ml-2 px-2 py-1 bg-gray-50 rounded-full border border-gray-200 hover:bg-gray-100 transition-colors"
@@ -340,18 +381,17 @@ export function FoodiesRoute() {
 
       <div className="fixed bottom-0 left-0 right-0 p-3 bg-white border-t border-gray-100 z-20">
         <motion.button
-          onClick={handleCashPayment}
-          disabled={currentLocationFoods.length === 0 || isProcessingPayment}
+          onClick={handleGoToDelivery}
+          disabled={currentLocationFoods.length === 0}
           className={`w-full py-3 rounded-lg font-semibold text-sm transition-colors flex items-center justify-center gap-2 ${
-            currentLocationFoods.length > 0 && !isProcessingPayment
+            currentLocationFoods.length > 0
               ? 'bg-green-600 text-white hover:bg-green-700'
               : 'bg-gray-300 text-gray-500 cursor-not-allowed'
           }`}
           whileTap={{ scale: 0.98 }}
         >
-          <span>💵</span>
-          {isProcessingPayment ? 'Processing...' : 'Cash'}
-          <ChevronDown size={16} />
+          Go to delivery
+          <ChevronRight size={16} />
         </motion.button>
       </div>
 

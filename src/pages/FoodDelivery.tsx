@@ -21,7 +21,7 @@ export function FoodDelivery() {
 
   const [selectedTab, setSelectedTab] = useState<'recommended' | 'faster' | 'cheaper'>('recommended');
   const [selectedModeId, setSelectedModeId] = useState('economy');
-  const [panelY, setPanelY] = useState(0);
+  const [panelHeight, setPanelHeight] = useState(600);
 
   const allModes: DeliveryMode[] = [
     { id: 'economy', label: 'Economy', time: '3 min', seats: 2, description: 'Affordable rides', price: 25 },
@@ -65,8 +65,22 @@ export function FoodDelivery() {
     }
   }, [cartItems.length, navigate]);
 
-  const handleDrag = (event: any, info: PanInfo) => {
-    setPanelY(Math.max(0, -info.offset.y));
+  const handleDragEnd = (event: any, info: PanInfo) => {
+    const dragVelocity = info.velocity.y;
+    const dragOffset = info.offset.y;
+
+    // If dragged down with enough velocity or offset, minimize panel
+    if (dragVelocity > 500 || dragOffset > 150) {
+      setPanelHeight(300);
+    }
+    // If dragged up with enough velocity or offset, maximize panel
+    else if (dragVelocity < -500 || dragOffset < -150) {
+      setPanelHeight(700);
+    }
+    // Otherwise snap back to default
+    else {
+      setPanelHeight(600);
+    }
   };
 
   const handleSelectMode = () => {
@@ -80,7 +94,12 @@ export function FoodDelivery() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50 relative overflow-hidden">
+    <motion.div
+      className="flex flex-col h-screen bg-gray-50 relative overflow-hidden"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
+    >
       <div className="absolute inset-0 bg-gradient-to-br from-blue-100 via-blue-50 to-green-50">
         <svg className="w-full h-full opacity-30">
           <defs>
@@ -96,6 +115,7 @@ export function FoodDelivery() {
         className="absolute top-4 left-4 z-10"
         initial={{ x: -50, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
+        transition={{ delay: 0.1 }}
       >
         <button
           onClick={() => navigate('/foodies-route')}
@@ -108,22 +128,24 @@ export function FoodDelivery() {
       <motion.div
         className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl z-20"
         drag="y"
-        dragConstraints={{ top: -300, bottom: 0 }}
-        dragElastic={0.2}
-        onDrag={handleDrag}
-        style={{ height: '600px' }}
-        initial={{ y: 400 }}
-        animate={{ y: 0 }}
-        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+        dragConstraints={{ top: -100, bottom: 300 }}
+        dragElastic={0.1}
+        onDragEnd={handleDragEnd}
+        animate={{ height: panelHeight }}
+        initial={{ y: '100%' }}
+        style={{ height: panelHeight }}
+        transition={{
+          type: 'spring',
+          damping: 30,
+          stiffness: 300,
+          height: { type: 'spring', damping: 25, stiffness: 200 }
+        }}
       >
-        <motion.div
-          className="w-full h-12 flex justify-center items-center cursor-grab active:cursor-grabbing"
-          drag="y"
-          dragConstraints={{ top: 0, bottom: 0 }}
-          dragElastic={0.1}
+        <div
+          className="w-full h-12 flex justify-center items-center cursor-grab active:cursor-grabbing touch-none"
         >
           <div className="w-12 h-1 bg-gray-300 rounded-full" />
-        </motion.div>
+        </div>
 
         <div className="px-4 pb-20 overflow-y-auto h-full">
           <div className="bg-blue-100 rounded-lg p-3 mb-4 flex items-center justify-center">
@@ -250,6 +272,6 @@ export function FoodDelivery() {
           </motion.button>
         </div>
       </motion.div>
-    </div>
+    </motion.div>
   );
 }
