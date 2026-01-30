@@ -237,26 +237,61 @@ export function FoodiesRoute() {
             </div>
 
             <AnimatePresence>
-              {showCurrentLocationSuggestions && currentLocationQuery && (
+              {showCurrentLocationSuggestions && (
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg shadow-lg z-40 border border-gray-200"
+                  className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg shadow-lg z-40 border border-gray-200 max-h-60 overflow-y-auto"
                 >
-                  {currentLocationSuggestions.slice(0, 4).map((addr) => (
-                    <button
-                      key={addr.id}
-                      onClick={() => handleCurrentLocationSelect(addr.address)}
-                      className="w-full flex items-center gap-2 p-2 hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0 text-left"
-                    >
-                      <Clock size={14} className="text-gray-400 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 text-xs">{addr.name}</p>
-                        <p className="text-[10px] text-gray-500">{addr.description}</p>
-                      </div>
-                    </button>
-                  ))}
+                  {!currentLocationQuery && (
+                    <>
+                      {currentLocation && currentLocation !== deliveryLocation && (
+                        <button
+                          onClick={() => handleCurrentLocationSelect(currentLocation)}
+                          className="w-full flex items-center gap-2 p-2 hover:bg-gray-50 transition-colors border-b border-gray-100 text-left bg-blue-50"
+                        >
+                          <Clock size={14} className="text-blue-500 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-gray-900 text-xs">Use current location</p>
+                            <p className="text-[10px] text-gray-500">{currentLocation.split(',')[0]}</p>
+                          </div>
+                        </button>
+                      )}
+                      {mockDeliveryAddresses.slice(0, 5).map((addr) => (
+                        <button
+                          key={addr.id}
+                          onClick={() => handleCurrentLocationSelect(addr.address)}
+                          className="w-full flex items-center gap-2 p-2 hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0 text-left"
+                        >
+                          <Clock size={14} className="text-gray-400 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-gray-900 text-xs">{addr.name}</p>
+                            <p className="text-[10px] text-gray-500">{addr.description}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  {currentLocationQuery && (
+                    <>
+                      {getCurrentLocationSuggestionsWithSynthetic().slice(0, 4).map((addr) => (
+                        <button
+                          key={addr.id}
+                          onClick={() => handleCurrentLocationSelect(addr.address)}
+                          className={`w-full flex items-center gap-2 p-2 hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0 text-left ${
+                            addr.id === 'use-current' ? 'bg-blue-50' : ''
+                          }`}
+                        >
+                          <Clock size={14} className={`flex-shrink-0 ${addr.id === 'use-current' ? 'text-blue-500' : 'text-gray-400'}`} />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-gray-900 text-xs">{addr.name}</p>
+                            <p className="text-[10px] text-gray-500">{addr.description}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -283,12 +318,12 @@ export function FoodiesRoute() {
                         if (el) stopInputRefs.current[stop.id] = el;
                       }}
                       type="text"
-                      value={stop.address || stopAddressQuery[stop.id] || ''}
+                      value={stopAddressQuery[stop.id] ?? stop.address ?? ''}
                       onChange={(e) => handleStopAddressChange(stop.id, e.target.value)}
                       onFocus={() => {
                         setActiveLocationInput(stop.id);
-                        setShowStopSuggestions(prev => ({ ...prev, [stop.id]: false }));
-                        setShowRecentAddresses(true);
+                        setShowStopSuggestions(prev => ({ ...prev, [stop.id]: true }));
+                        setShowRecentAddresses(false);
                       }}
                       onBlur={() => setTimeout(() => setShowStopSuggestions(prev => ({ ...prev, [stop.id]: false })), 200)}
                       placeholder="Stop location"
